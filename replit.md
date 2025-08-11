@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a Streamlit-based chatbot application designed to provide evidence-based information and support to new mothers during their postpartum recovery journey. The assistant leverages a comprehensive knowledge base of postpartum health information and uses OpenAI's GPT-4o model with LlamaIndex for intelligent question answering. The application covers various aspects of postpartum care including physical recovery, breastfeeding, emotional wellbeing, and provides clear guidance on when to seek professional medical help.
+This is a Streamlit-based chatbot application designed to provide evidence-based information and support to new mothers during their postpartum recovery journey. The assistant leverages a comprehensive knowledge base of postpartum health information and uses Google's Gemini AI for intelligent question answering and conversational responses. The application covers 8 categories of postpartum care: Physical Recovery, Breastfeeding Basics, Breastfeeding Common Issues, Emotional & Mental Health, Lifestyle & Daily Life, Newborn Care, Pumping & Storage, and Sexual & Reproductive Health.
 
 ## User Preferences
 
@@ -23,10 +23,10 @@ Preferred communication style: Simple, everyday language.
   - `chat_interface.py`: Chat logic and response formatting
 
 **AI/ML Stack**
-- OpenAI GPT-4o as the primary language model for response generation
-- OpenAI embeddings for semantic search capabilities
-- LlamaIndex framework for document indexing, retrieval, and query processing
-- Vector-based search with confidence scoring and threshold filtering
+- Google Gemini 2.5-flash as the primary language model for intelligent search and conversational response generation
+- Gemini-powered semantic search for matching user queries to knowledge base content
+- Conversational AI that provides warm, supportive responses rather than clinical answers
+- Fallback keyword-based search for reliability
 
 **Data Management**
 - JSON-based knowledge base containing structured Q&A pairs
@@ -35,22 +35,23 @@ Preferred communication style: Simple, everyday language.
 - Semantic search with top-k retrieval (default k=3)
 
 **Response Generation System**
-- Confidence-based response filtering (threshold: 0.6)
-- Structured response formatting with short answers, detailed explanations, and related questions
-- Fallback responses for low-confidence or failed queries
-- Error handling with graceful degradation
+- Conversational AI responses using Gemini for warm, supportive communication
+- Clickable related questions for enhanced user interaction
+- Adaptive confidence thresholds (lowered to 0.3) for broader question coverage
+- Intelligent fallback to conversational responses for any postpartum-related query
+- Enhanced UI with warning callouts for "when to seek help" information
 
 ## External Dependencies
 
 **APIs and Services**
-- OpenAI API: GPT-4o model for text generation and embeddings
-- Requires OPENAI_API_KEY environment variable
+- Google Gemini API: 2.5-flash model for intelligent search and conversational responses
+- Requires GEMINI_API_KEY environment variable
 
 **Python Libraries**
 - `streamlit`: Web application framework
-- `llama-index`: Document indexing and retrieval framework
-- `pandas`: Data manipulation (imported but usage not shown in provided code)
-- `openai`: OpenAI API client (via LlamaIndex)
+- `google-genai`: Google Gemini API client for AI capabilities
+- `pandas`: Data manipulation utilities
+- `typing`: Type hints for better code structure
 
 **Data Sources**
 - Static JSON knowledge base file: `attached_assets/postpartum_physical_recovery_1754936677091.json`

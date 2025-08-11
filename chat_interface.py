@@ -14,32 +14,39 @@ class ChatInterface:
             results = self.knowledge_base.search(user_question, top_k=3)
             
             if not results:
-                return self._get_fallback_response(), {"confidence_score": 0.0}
+                # Use Gemini to generate a conversational response for questions not in knowledge base
+                response = self.knowledge_base.generate_conversational_response(user_question)
+                return response, {"confidence_score": 0.0, "conversational": True}
             
             # Get the best match
             best_match, confidence = results[0]
             
-            # Check confidence threshold
-            if confidence < self.confidence_threshold:
-                return self._get_fallback_response(), {"confidence_score": confidence}
+            # Always try to be helpful - lower threshold for generating responses
+            if confidence < 0.3:
+                # Use Gemini to generate a conversational response
+                response = self.knowledge_base.generate_conversational_response(user_question)
+                return response, {"confidence_score": confidence, "conversational": True}
             
-            # Format the response
-            response = self._format_response(best_match)
+            # Generate conversational response using the matched data
+            conversational_response = self.knowledge_base.generate_conversational_response(user_question, best_match)
             
             # Prepare metadata
             metadata = {
                 "confidence_score": confidence,
                 "category": best_match.get("Category", ""),
                 "source": best_match.get("Source", ""),
-                "related_questions": self._parse_related_questions(best_match.get("Related Questions", ""))
+                "related_questions": self._parse_related_questions(best_match.get("Related Questions", "")),
+                "when_to_seek_help": best_match.get("When to Seek Help", ""),
+                "conversational": True
             }
             
-            return response, metadata
+            return conversational_response, metadata
             
         except Exception as e:
             error_response = (
-                "I'm sorry, I encountered an error while searching for information. "
-                "Please try rephrasing your question or consult with a healthcare provider."
+                "I'm here to help with your postpartum journey. Could you tell me more about "
+                "what you're experiencing? If you have urgent concerns, please don't hesitate "
+                "to contact your healthcare provider."
             )
             return error_response, {"error": str(e)}
     

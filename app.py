@@ -48,20 +48,47 @@ def main():
     
     with chat_container:
         # Display chat history
-        for message in st.session_state.messages:
+        for i, message in enumerate(st.session_state.messages):
             with st.chat_message(message["role"]):
                 if message["role"] == "assistant":
-                    # Display structured response
+                    # Display response content
                     if "content" in message:
                         st.markdown(message["content"])
+                    
                     if "metadata" in message:
                         metadata = message["metadata"]
-                        if metadata.get("confidence_score"):
-                            st.caption(f"Confidence: {metadata['confidence_score']:.2f}")
+                        
+                        # Display additional info for knowledge base matches
+                        if not metadata.get("conversational") or metadata.get("when_to_seek_help"):
+                            if metadata.get("when_to_seek_help"):
+                                st.warning(f"⚠️ **When to seek help:** {metadata['when_to_seek_help']}")
+                        
+                        # Display confidence and source
+                        if metadata.get("confidence_score") and metadata["confidence_score"] > 0:
+                            st.caption(f"Match confidence: {metadata['confidence_score']:.2f}")
+                        
+                        if metadata.get("source"):
+                            source = metadata["source"]
+                            if "http" in source:
+                                import re
+                                url_match = re.search(r'https?://[^\s]+', source)
+                                if url_match:
+                                    url = url_match.group()
+                                    source_name = source.replace(url, "").replace("–", "").strip()
+                                    st.caption(f"📚 Source: [{source_name}]({url})")
+                                else:
+                                    st.caption(f"📚 Source: {source}")
+                            else:
+                                st.caption(f"📚 Source: {source}")
+                        
+                        # Display clickable related questions
                         if metadata.get("related_questions"):
-                            with st.expander("Related Questions"):
-                                for rq in metadata["related_questions"]:
-                                    st.write(f"• {rq}")
+                            with st.expander("💡 You might also ask..."):
+                                for j, rq in enumerate(metadata["related_questions"]):
+                                    if st.button(rq, key=f"history_related_{i}_{j}", use_container_width=True):
+                                        # Add the related question as if user typed it
+                                        st.session_state.messages.append({"role": "user", "content": rq})
+                                        st.rerun()
                 else:
                     st.markdown(message["content"])
         
@@ -83,14 +110,39 @@ def main():
                         # Display response
                         st.markdown(response)
                         
-                        # Display metadata
-                        if metadata.get("confidence_score"):
-                            st.caption(f"Confidence: {metadata['confidence_score']:.2f}")
+                        # Display additional info for knowledge base matches
+                        if not metadata.get("conversational") or metadata.get("when_to_seek_help"):
+                            if metadata.get("when_to_seek_help"):
+                                st.warning(f"⚠️ **When to seek help:** {metadata['when_to_seek_help']}")
                         
+                        # Display metadata
+                        if metadata.get("confidence_score") and metadata["confidence_score"] > 0:
+                            st.caption(f"Match confidence: {metadata['confidence_score']:.2f}")
+                        
+                        # Display source
+                        if metadata.get("source"):
+                            source = metadata["source"]
+                            if "http" in source:
+                                # Extract URL and source name
+                                import re
+                                url_match = re.search(r'https?://[^\s]+', source)
+                                if url_match:
+                                    url = url_match.group()
+                                    source_name = source.replace(url, "").replace("–", "").strip()
+                                    st.caption(f"📚 Source: [{source_name}]({url})")
+                                else:
+                                    st.caption(f"📚 Source: {source}")
+                            else:
+                                st.caption(f"📚 Source: {source}")
+                        
+                        # Display clickable related questions
                         if metadata.get("related_questions"):
-                            with st.expander("Related Questions"):
+                            with st.expander("💡 You might also ask..."):
                                 for rq in metadata["related_questions"]:
-                                    st.write(f"• {rq}")
+                                    if st.button(rq, key=f"related_{rq}", use_container_width=True):
+                                        # Add the related question as if user typed it
+                                        st.session_state.messages.append({"role": "user", "content": rq})
+                                        st.rerun()
                         
                         # Add assistant message to chat history
                         st.session_state.messages.append({

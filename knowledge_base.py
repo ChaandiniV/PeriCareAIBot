@@ -43,23 +43,27 @@ class PostpartumKnowledgeBase:
         try:
             # Use Gemini to find the best matching questions
             search_prompt = f"""
-            You are helping to find the most relevant postpartum health questions for a user's query.
+            You are a helpful postpartum health assistant. Find the most relevant questions from the knowledge base for the user's query.
             
             User's question: "{query}"
             
-            Available questions and their keywords:
+            Available questions across all categories:
             """
             
-            # Add all questions with their keywords for context
-            for i, item in enumerate(self.data):
+            # Add all questions with their keywords for context (limit to avoid token limits)
+            for i, item in enumerate(self.data[:50]):  # Show first 50 to avoid token limits
                 question = item.get("Question", "")
                 keywords = item.get("Keywords", "")
                 category = item.get("Category", "")
-                search_prompt += f"\n{i+1}. {question} (Keywords: {keywords}, Category: {category})"
+                search_prompt += f"\n{i+1}. [{category}] {question} (Keywords: {keywords})"
+            
+            if len(self.data) > 50:
+                search_prompt += f"\n... and {len(self.data) - 50} more questions available in categories: Physical Recovery, Breastfeeding Basics, Breastfeeding Common Issues, Emotional & Mental Health, Lifestyle & Daily Life, Newborn Care, Pumping & Storage, Sexual & Reproductive Health"
             
             search_prompt += f"""
             
             Please return the top {top_k} most relevant question numbers (1-{len(self.data)}) that best match the user's query.
+            Be generous with matches - if the question is even somewhat related to postpartum health, give it a reasonable confidence score.
             Also provide a confidence score from 0.0 to 1.0 for each match.
             
             Respond in this exact JSON format:
@@ -72,7 +76,7 @@ class PostpartumKnowledgeBase:
             )
             
             if not response.text:
-                return []
+                return self._fallback_search(query, top_k)
             
             # Parse the response
             import json
@@ -150,6 +154,56 @@ class PostpartumKnowledgeBase:
             return None
         
         return best_match, confidence
+    
+    def generate_conversational_response(self, user_query: str, matched_data: Dict = None) -> str:
+        """Generate a conversational response using Gemini"""
+        try:
+            if matched_data:
+                # Create a conversational response based on matched data
+                prompt = f"""
+                You are a warm, supportive postpartum health assistant. A new mother asked: "{user_query}"
+                
+                Based on this information from our medical knowledge base:
+                - Question: {matched_data.get('Question', '')}
+                - Short Answer: {matched_data.get('Short Answer', '')}
+                - Detailed Answer: {matched_data.get('Long Answer', '')}
+                - When to Seek Help: {matched_data.get('When to Seek Help', '')}
+                - Source: {matched_data.get('Source', '')}
+                
+                Please provide a warm, conversational response that:
+                1. Addresses the mother directly and empathetically
+                2. Incorporates the medical information naturally
+                3. Uses the tone: {matched_data.get('Tone', 'supportive, empathetic')}
+                4. Feels like talking to a knowledgeable friend, not reading a medical textbook
+                5. Keeps the essential medical accuracy but makes it conversational
+                
+                Start with something like "I understand your concern about..." or "That's such a common question..."
+                """
+            else:
+                # Generate a general helpful response for questions not in the knowledge base
+                prompt = f"""
+                You are a warm, supportive postpartum health assistant. A new mother asked: "{user_query}"
+                
+                This question isn't directly covered in our knowledge base, but you should:
+                1. Acknowledge her concern warmly
+                2. Provide general supportive guidance if it's related to postpartum health
+                3. Always emphasize consulting with healthcare providers for specific medical advice
+                4. Be encouraging and supportive
+                5. If it's completely unrelated to postpartum health, gently redirect to postpartum topics
+                
+                Keep the response conversational and caring, like talking to a supportive friend.
+                """
+            
+            response = self.client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt
+            )
+            
+            return response.text if response.text else "I'm here to help with any postpartum questions you have. Could you tell me more about what you're experiencing?"
+            
+        except Exception as e:
+            print(f"Failed to generate conversational response: {e}")
+            return "I'm here to support you through your postpartum journey. Could you help me understand what specific concern you have?"
     
     def get_categories(self) -> List[str]:
         """Get list of available categories"""
