@@ -50,15 +50,12 @@ class PostpartumKnowledgeBase:
             Available questions across all categories:
             """
             
-            # Add all questions with their keywords for context (limit to avoid token limits)
-            for i, item in enumerate(self.data[:50]):  # Show first 50 to avoid token limits
+            # Add all questions with their keywords for context
+            for i, item in enumerate(self.data):
                 question = item.get("Question", "")
                 keywords = item.get("Keywords", "")
                 category = item.get("Category", "")
                 search_prompt += f"\n{i+1}. [{category}] {question} (Keywords: {keywords})"
-            
-            if len(self.data) > 50:
-                search_prompt += f"\n... and {len(self.data) - 50} more questions available in categories: Physical Recovery, Breastfeeding Basics, Breastfeeding Common Issues, Emotional & Mental Health, Lifestyle & Daily Life, Newborn Care, Pumping & Storage, Sexual & Reproductive Health"
             
             search_prompt += f"""
             
@@ -114,19 +111,34 @@ class PostpartumKnowledgeBase:
         for item in self.data:
             score = 0.0
             
-            # Check question
+            # Check question for exact or partial matches
             question = item.get("Question", "").lower()
-            if query_lower in question:
-                score += 0.8
+            if query_lower in question or question in query_lower:
+                score += 0.9
             
-            # Check keywords
+            # Check for key terms
             keywords = item.get("Keywords", "").lower()
+            short_answer = item.get("Short Answer", "").lower()
+            long_answer = item.get("Long Answer", "").lower()
+            
+            # Split query into words and check each
             query_words = query_lower.split()
             for word in query_words:
-                if word in keywords:
-                    score += 0.3
-                if word in question:
-                    score += 0.2
+                if len(word) > 3:  # Only check meaningful words
+                    if word in keywords:
+                        score += 0.4
+                    if word in question:
+                        score += 0.3
+                    if word in short_answer:
+                        score += 0.2
+                    if word in long_answer:
+                        score += 0.1
+            
+            # Special boost for key terms
+            key_terms = ["milk supply", "low supply", "breastfeeding", "bleeding", "exercise", "hair loss", "stitches", "c-section"]
+            for term in key_terms:
+                if term in query_lower and term in (question + " " + keywords + " " + short_answer):
+                    score += 0.5
             
             # Check category
             category = item.get("Category", "").lower()
@@ -171,13 +183,13 @@ class PostpartumKnowledgeBase:
                 - Source: {matched_data.get('Source', '')}
                 
                 Please provide a warm, conversational response that:
-                1. Addresses the mother directly and empathetically
-                2. Incorporates the medical information naturally
+                1. Is concise but supportive (2-3 sentences max)
+                2. Incorporates the most important medical information from Short Answer and Long Answer
                 3. Uses the tone: {matched_data.get('Tone', 'supportive, empathetic')}
-                4. Feels like talking to a knowledgeable friend, not reading a medical textbook
-                5. Keeps the essential medical accuracy but makes it conversational
+                4. Feels like talking to a knowledgeable friend
+                5. Keeps essential medical accuracy but brief and conversational
                 
-                Start with something like "I understand your concern about..." or "That's such a common question..."
+                Keep it short and helpful - don't repeat all the information, just the key points.
                 """
             else:
                 # Generate a general helpful response for questions not in the knowledge base
