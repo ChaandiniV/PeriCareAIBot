@@ -91,13 +91,18 @@ class PostpartumRAGSystem:
             long_answer = item.get("Long Answer", "").lower()
             category = item.get("Category", "").lower()
             
-            # Exact question match gets highest score
+            # Check for exact question match first (highest priority)
             if query_lower == question:
-                score = 1.0
-            # High score for questions containing the query or vice versa
-            elif query_lower in question or question in query_lower:
-                score = 0.95
-            # Check for specific postpartum health phrases
+                score = 2.0  # Exact match gets highest score
+            # Check for direct containment matches
+            elif query_lower in question:
+                score = 1.8  # User query is contained in the question
+            elif question in query_lower:
+                score = 1.6  # Question is contained in user query
+            # Check for specific keyword matches
+            elif "low milk supply" in query_lower and "low supply" in keywords:
+                score = 1.5  # Specific low milk supply match
+            # Check for other phrase matches
             else:
                 key_phrases = [
                     "low milk supply", "milk supply", "pump at work", "pumping at work",
@@ -106,13 +111,20 @@ class PostpartumRAGSystem:
                     "night sweats", "hemorrhoids", "constipation", "perineal pain"
                 ]
                 
-                # Phrase matching gets high score
+                # Phrase matching gets high score, but be more specific
                 for phrase in key_phrases:
                     if phrase in query_lower:
-                        if phrase in (question + " " + keywords + " " + short_answer):
-                            score = max(score, 0.92)
+                        # Exact phrase match in question gets highest score
+                        if phrase in question:
+                            score = max(score, 0.94)
+                        # Phrase match in keywords gets good score
+                        elif phrase in keywords:
+                            score = max(score, 0.90)
+                        # Phrase match in answers gets medium score
+                        elif phrase in short_answer:
+                            score = max(score, 0.86)
                         elif phrase in long_answer:
-                            score = max(score, 0.85)
+                            score = max(score, 0.82)
                 
                 # Word matching with context
                 query_words = [word for word in query_lower.split() if len(word) > 3]
@@ -142,7 +154,7 @@ class PostpartumRAGSystem:
                     score += 0.25
             
             if score > 0:
-                results.append((item, min(score, 1.0)))
+                results.append((item, score))  # Don't cap scores, let natural ranking work
         
         # Sort by score and return top_k
         results.sort(key=lambda x: x[1], reverse=True)
