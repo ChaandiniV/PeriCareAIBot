@@ -3,19 +3,19 @@ from typing import Tuple, Dict, Any
 import streamlit as st
 
 class ChatInterface:
-    def __init__(self, knowledge_base):
-        self.knowledge_base = knowledge_base
+    def __init__(self, rag_system):
+        self.rag_system = rag_system
         self.confidence_threshold = 0.6
         
     def get_response(self, user_question: str) -> Tuple[str, Dict[str, Any]]:
         """Generate a response to user's question"""
         try:
-            # Search for relevant information
-            results = self.knowledge_base.search(user_question, top_k=3)
+            # Search for relevant information using RAG
+            results = self.rag_system.search(user_question, top_k=3)
             
             if not results:
                 # Use Gemini to generate a conversational response for questions not in knowledge base
-                response = self.knowledge_base.generate_conversational_response(user_question)
+                response = self.rag_system.generate_conversational_response(user_question)
                 return response, {"confidence_score": 0.0, "conversational": True}
             
             # Get the best match
@@ -26,10 +26,10 @@ class ChatInterface:
                 response = self._format_response(best_match)
             # For medium confidence (0.3-0.7), use conversational response with matched data
             elif confidence >= 0.3:
-                response = self.knowledge_base.generate_conversational_response(user_question, best_match)
+                response = self.rag_system.generate_conversational_response(user_question, best_match)
             # For low confidence, generate a general conversational response
             else:
-                response = self.knowledge_base.generate_conversational_response(user_question)
+                response = self.rag_system.generate_conversational_response(user_question)
                 return response, {"confidence_score": confidence, "conversational": True}
             
             # Prepare metadata

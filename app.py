@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from knowledge_base import PostpartumKnowledgeBase
+from rag_system import PostpartumRAGSystem
 from chat_interface import ChatInterface
 
 # Configure Streamlit page
@@ -29,14 +29,21 @@ def main():
         st.session_state.messages = []
     
     if "knowledge_base" not in st.session_state:
-        with st.spinner("Loading knowledge base..."):
+        with st.spinner("Loading RAG system..."):
             try:
-                st.session_state.knowledge_base = PostpartumKnowledgeBase()
-                st.session_state.knowledge_base.load_data()
-                st.success("✅ Knowledge base loaded successfully!")
+                gemini_key = os.environ.get("GEMINI_API_KEY")
+                openai_key = os.environ.get("OPENAI_API_KEY")  # Optional for better embeddings
+                
+                if not gemini_key:
+                    st.error("❌ GEMINI_API_KEY not found in environment variables.")
+                    st.stop()
+                
+                st.session_state.knowledge_base = PostpartumRAGSystem(gemini_key, openai_key)
+                st.session_state.knowledge_base.load_knowledge_base("attached_assets/postpartum_physical_recovery_1754936677091.json")
+                st.success("✅ RAG system loaded successfully!")
             except Exception as e:
-                st.error(f"❌ Failed to load knowledge base: {str(e)}")
-                st.info("Please check your Gemini API key and internet connection.")
+                st.error(f"❌ Failed to load RAG system: {str(e)}")
+                st.info("Please check your API keys and internet connection.")
                 st.stop()
     
     # Initialize chat interface
