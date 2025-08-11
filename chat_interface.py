@@ -21,14 +21,16 @@ class ChatInterface:
             # Get the best match
             best_match, confidence = results[0]
             
-            # Always try to be helpful - lower threshold for generating responses
-            if confidence < 0.3:
-                # Use Gemini to generate a conversational response
+            # If we have a good match (0.7+), use the structured answer format
+            if confidence >= 0.7:
+                response = self._format_response(best_match)
+            # For medium confidence (0.3-0.7), use conversational response with matched data
+            elif confidence >= 0.3:
+                response = self.knowledge_base.generate_conversational_response(user_question, best_match)
+            # For low confidence, generate a general conversational response
+            else:
                 response = self.knowledge_base.generate_conversational_response(user_question)
                 return response, {"confidence_score": confidence, "conversational": True}
-            
-            # Generate conversational response using the matched data
-            conversational_response = self.knowledge_base.generate_conversational_response(user_question, best_match)
             
             # Prepare metadata
             metadata = {
@@ -37,10 +39,10 @@ class ChatInterface:
                 "source": best_match.get("Source", ""),
                 "related_questions": self._parse_related_questions(best_match.get("Related Questions", "")),
                 "when_to_seek_help": best_match.get("When to Seek Help", ""),
-                "conversational": True
+                "conversational": confidence < 0.7  # Mark as conversational only for lower confidence
             }
             
-            return conversational_response, metadata
+            return response, metadata
             
         except Exception as e:
             error_response = (

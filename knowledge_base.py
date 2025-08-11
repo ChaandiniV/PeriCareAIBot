@@ -36,35 +36,37 @@ class PostpartumKnowledgeBase:
             raise Exception(f"Failed to load knowledge base: {e}")
     
     def search(self, query: str, top_k: int = 3) -> List[Tuple[Dict, float]]:
-        """Search for relevant Q&A pairs using Gemini for intelligent matching"""
+        """Search for relevant Q&A pairs - prioritize exact matches first, then keyword matching"""
         if not self.data:
             raise ValueError("Knowledge base not loaded. Call load_data() first.")
         
+        # First try direct keyword matching for better results
+        direct_results = self._fallback_search(query, top_k)
+        
+        # If we get good matches from keyword search, use those
+        if direct_results and direct_results[0][1] > 0.7:
+            return direct_results
+        
+        # Otherwise try Gemini search as backup
         try:
-            # Use Gemini to find the best matching questions
+            # Use a more focused Gemini search
             search_prompt = f"""
-            You are a helpful postpartum health assistant. Find the most relevant questions from the knowledge base for the user's query.
+            Find the question number that best matches: "{query}"
             
-            User's question: "{query}"
-            
-            Available questions across all categories:
+            Questions:
             """
             
-            # Add all questions with their keywords for context
+            # Add questions with their index
             for i, item in enumerate(self.data):
                 question = item.get("Question", "")
                 keywords = item.get("Keywords", "")
-                category = item.get("Category", "")
-                search_prompt += f"\n{i+1}. [{category}] {question} (Keywords: {keywords})"
+                search_prompt += f"{i+1}. {question} (Keywords: {keywords})\n"
             
             search_prompt += f"""
             
-            Please return the top {top_k} most relevant question numbers (1-{len(self.data)}) that best match the user's query.
-            Be generous with matches - if the question is even somewhat related to postpartum health, give it a reasonable confidence score.
-            Also provide a confidence score from 0.0 to 1.0 for each match.
-            
-            Respond in this exact JSON format:
-            {{"matches": [{{"question_number": 1, "confidence": 0.95}}, {{"question_number": 5, "confidence": 0.8}}]}}
+            Return ONLY the question number (1-{len(self.data)}) that best matches the user's query.
+            If multiple questions match, return the best one.
+            Response format: just the number, like: 42
             """
             
             response = self.client.models.generate_content(
@@ -72,36 +74,19 @@ class PostpartumKnowledgeBase:
                 contents=search_prompt
             )
             
-            if not response.text:
-                return self._fallback_search(query, top_k)
-            
-            # Parse the response
-            import json
-            try:
-                result = json.loads(response.text)
-                matches = result.get("matches", [])
-                
-                results = []
-                for match in matches[:top_k]:
-                    question_num = match.get("question_number", 1) - 1  # Convert to 0-based index
-                    confidence = match.get("confidence", 0.0)
-                    
-                    if 0 <= question_num < len(self.data):
-                        results.append((self.data[question_num], confidence))
-                
-                return results
-                
-            except json.JSONDecodeError:
-                # Fallback to simple keyword matching
-                return self._fallback_search(query, top_k)
+            if response.text and response.text.strip().isdigit():
+                question_num = int(response.text.strip()) - 1
+                if 0 <= question_num < len(self.data):
+                    return [(self.data[question_num], 0.8)]
             
         except Exception as e:
             print(f"Gemini search failed: {e}")
-            # Fallback to simple keyword matching
-            return self._fallback_search(query, top_k)
+        
+        # Return the keyword search results as final fallback
+        return direct_results if direct_results else []
     
     def _fallback_search(self, query: str, top_k: int = 3) -> List[Tuple[Dict, float]]:
-        """Fallback search using simple keyword matching"""
+        """Direct keyword and phrase matching search"""
         if not self.data:
             return []
         
@@ -111,39 +96,54 @@ class PostpartumKnowledgeBase:
         for item in self.data:
             score = 0.0
             
-            # Check question for exact or partial matches
             question = item.get("Question", "").lower()
-            if query_lower in question or question in query_lower:
-                score += 0.9
-            
-            # Check for key terms
             keywords = item.get("Keywords", "").lower()
             short_answer = item.get("Short Answer", "").lower()
             long_answer = item.get("Long Answer", "").lower()
             
-            # Split query into words and check each
-            query_words = query_lower.split()
-            for word in query_words:
-                if len(word) > 3:  # Only check meaningful words
-                    if word in keywords:
-                        score += 0.4
+            # Exact question match gets highest score
+            if query_lower == question:
+                score = 1.0
+            # High score for questions containing the query or query containing the question
+            elif query_lower in question or question in query_lower:
+                score = 0.95
+            else:
+                # Check key phrases first
+                key_phrases = [
+                    "low milk supply", "milk supply", "pump at work", "pumping at work",
+                    "postpartum bleeding", "hair loss", "c-section", "exercise after birth",
+                    "breastfeeding", "stitches", "period return", "diastasis recti"
+                ]
+                
+                for phrase in key_phrases:
+                    if phrase in query_lower and phrase in (question + " " + keywords + " " + short_answer):
+                        score = max(score, 0.9)
+                
+                # Check individual meaningful words
+                query_words = [word for word in query_lower.split() if len(word) > 3]
+                word_matches = 0
+                
+                for word in query_words:
                     if word in question:
                         score += 0.3
-                    if word in short_answer:
-                        score += 0.2
-                    if word in long_answer:
+                        word_matches += 1
+                    elif word in keywords:
+                        score += 0.25
+                        word_matches += 1
+                    elif word in short_answer:
+                        score += 0.15
+                        word_matches += 1
+                    elif word in long_answer:
                         score += 0.1
-            
-            # Special boost for key terms
-            key_terms = ["milk supply", "low supply", "breastfeeding", "bleeding", "exercise", "hair loss", "stitches", "c-section"]
-            for term in key_terms:
-                if term in query_lower and term in (question + " " + keywords + " " + short_answer):
-                    score += 0.5
-            
-            # Check category
-            category = item.get("Category", "").lower()
-            if any(word in category for word in query_words):
-                score += 0.1
+                
+                # Boost score if multiple words match
+                if word_matches >= 2:
+                    score += 0.2
+                
+                # Check category match
+                category = item.get("Category", "").lower()
+                if any(word in category for word in query_words):
+                    score += 0.1
             
             if score > 0:
                 results.append((item, min(score, 1.0)))
